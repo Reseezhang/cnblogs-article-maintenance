@@ -64,7 +64,7 @@ python $S/verify_all.py 12345678                       # 渲染 + 元信息一�
 |---|---|---|
 | `cnblogs_push.py` | 主工具：`check` / `list` / `backup` / `draft` / `update`（支持 `--keywords` `--excerpt` `--no-publish`） | 是 |
 | `html2md.py` | 把 `description` 的 HTML 形态还原成干净 Markdown 底稿，支持 `--shift N` 调标题层级 | 否 |
-| `check_render.py` | 抓线上页面判断渲染状态（字面量必须为 0）。改完必跑 | 否 |
+| `check_render.py` | 抓线上页面判断渲染状态（字面量必须为 0）。改完必跑。统计前会排除 `<pre>`/`<code>` 区域，否则代码块里合法的 ``` 与 `**` 会被误判成未渲染 | 否 |
 | `verify_all.py` | 渲染 + 元信息（正文长度 / 摘要 / 标签 / 分类）一次核对 | 是 |
 | `upload_image.py` | 上传本地图片到博客园图床，返回 URL | 是 |
 | `delete_posts.py` | 批量删除：**强制先备份 + 校验落盘一致才删**，删后自动探活 | 是 |

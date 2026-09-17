@@ -10,6 +10,10 @@
 实测过 4 篇文章分类为空、缺 `[Markdown]` 标记，于是被按 HTML 解析，
 读者看到的是带 `##` 和 `**` 的源码墙。**改完文章必须跑一次这个脚本。**
 
+⚠️ 统计字面量前会先把 <pre>/<code> 区域挖空。不这么做会大量误报：
+   在代码块里出现 ``` 或 ** 是正常内容（示例代码、讲 Markdown 语法的文章本身），
+   它们被正确渲染进了代码块，不是"未渲染"。
+
 用法：
     python check_render.py 12345678 12345679
     python check_render.py --all                 # 取当前目录「原始备份/」里全部 postId
@@ -73,6 +77,17 @@ def fetch(url):
         return r.read().decode("utf-8", errors="replace")
 
 
+def strip_code(seg):
+    """把 <pre> 与 <code> 区域整体挖空。
+
+    代码块里的 ``` / ** / ## 是渲染正常的证据，不是"未渲染"的信号。
+    先挖 <pre>（它内部通常还包着 <code>），再挖剩下的行内 <code>。
+    """
+    seg = re.sub(r"<pre\b[^>]*>.*?</pre>", " ", seg, flags=re.S | re.I)
+    seg = re.sub(r"<code\b[^>]*>.*?</code>", " ", seg, flags=re.S | re.I)
+    return seg
+
+
 def analyze(pid, home):
     # 加时间戳绕过 CDN 缓存，否则刚推完可能抓到旧内容
     url = "%s/p/%s?t=%d" % (home, pid, int(time.time()))
@@ -81,6 +96,7 @@ def analyze(pid, home):
     if i < 0:
         return None
     seg = html[i:i + 45000]
+    plain = strip_code(seg)
     return {
         "url": url.split("?")[0],
         "h2": len(re.findall(r"<h2", seg)),
@@ -88,9 +104,11 @@ def analyze(pid, home):
         "pre": len(re.findall(r"<pre", seg)),
         "table": len(re.findall(r"<table", seg)),
         "code": len(re.findall(r"<code", seg)),
-        "lit_hash": len(re.findall(r"^\s*<div>#{1,6} ", seg, re.M)),
-        "lit_bold": seg.count("**"),
-        "lit_fence": seg.count("```"),
+        # 只在「非代码区域」统计字面量
+        "lit_div": len(re.findall(r"^\s*<div>#{1,6} ", plain, re.M)),
+        "lit_hash": plain.count("##"),
+        "lit_bold": plain.count("**"),
+        "lit_fence": plain.count("```"),
     }
 
 
@@ -114,10 +132,12 @@ def main():
         print("无法确定站点前缀，请用 --home 指定（如 https://www.cnblogs.com/yourname）", file=sys.stderr)
         sys.exit(1)
 
-    print("站点：%s\n" % home)
-    print("%-10s %4s %4s %4s %5s %5s %7s %6s %6s  %s" % (
-        "postId", "h2", "h3", "pre", "table", "code", "字面##", "字面**", "字面```", "标题"))
-    print("-" * 124)
+    print("站点：%s" % home)
+    print("（字面量统计已排除 <pre>/<code> 区域，代码块里的 ``` 与 ** 不算问题）\n")
+    print("%-10s %4s %4s %4s %5s %5s %7s %6s %7s  %s" % (
+        "postId", "h2", "h3", "pre", "table", "code",
+        "字面##", "字面**", "字面```", "标题"))
+    print("-" * 128)
 
     bad, ok = [], []
     for pid in ids:
@@ -129,12 +149,24 @@ def main():
         if not r:
             print("%-10s 未找到正文容器" % pid)
             continue
-        broken = (r["lit_hash"] > 0) or (r["lit_fence"] > 0)
+        # 判定：任一信号非 0 就是可疑，并把触发原因打出来
+        reasons = []
+        if r["lit_div"]:
+            reasons.append("<div>## x%d" % r["lit_div"])
+        if r["lit_fence"]:
+            reasons.append("``` x%d" % r["lit_fence"])
+        if r["lit_bold"]:
+            reasons.append("** x%d" % r["lit_bold"])
+        if r["lit_hash"] and not r["lit_div"]:
+            reasons.append("## x%d" % r["lit_hash"])
+        broken = bool(reasons)
+
         (bad if broken else ok).append(pid)
-        print("%-10s %4d %4d %4d %5d %5d %7d %6d %6d  %s%s" % (
+        print("%-10s %4d %4d %4d %5d %5d %7d %6d %7d  %s%s" % (
             pid, r["h2"], r["h3"], r["pre"], r["table"], r["code"],
             r["lit_hash"], r["lit_bold"], r["lit_fence"],
-            t.get(pid, "")[:26], "  <== 未渲染" if broken else ""))
+            t.get(pid, "")[:24],
+            "  <== 未渲染（" + "、".join(reasons) + "）" if broken else ""))
 
     print("\n结论：%d 篇未渲染，%d 篇正常。" % (len(bad), len(ok)))
     if bad:
