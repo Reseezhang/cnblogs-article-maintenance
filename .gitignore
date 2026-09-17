@@ -1,0 +1,22 @@
+# 凭据：永远不要提交
+.cnblogs.env
+*.env
+!.cnblogs.env.example
+
+# 脚本产出的本地数据
+原始备份/
+删除备份/
+还原/
+配图/*.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

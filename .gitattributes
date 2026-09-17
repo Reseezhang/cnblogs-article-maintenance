@@ -1,0 +1,7 @@
+# 统一用 LF。Windows 上 Git for Windows 默认 core.autocrlf=true，
+# 会把工作区文件转成 CRLF；这里显式固定，保证跨平台一致。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
